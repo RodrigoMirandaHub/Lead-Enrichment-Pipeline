@@ -1,0 +1,234 @@
+{
+  "name": "Lead Enrichment Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "b08d36c8-9e7a-4f0a-a13d-79bf60aed76a",
+      "name": "Webhook",
+      "webhookId": "45106444-151c-4acf-a2d0-11499923a9c8"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Analyze this lead and return ONLY valid JSON, no explanation:\\nName: {{ $('Webhook').item.json.body.name }}\\nEmail: {{ $('Webhook').item.json.body.email }}\\nCompany: {{ $('Webhook').item.json.body.company }}\\n\\nReturn exactly: {\\\"score\\\": 1-10, \\\"category\\\": \\\"hot|warm|cold\\\", \\\"reasoning\\\": \\\"one sentence\\\"}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        208,
+        0
+      ],
+      "id": "c5cee6ed-0597-47ba-91c9-23dd405dca24",
+      "name": "HTTP Request",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "80j2NLVnDTMAP8Vx",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const content = $input.item.json.choices[0].message.content;\nconst parsed = JSON.parse(content);\n\nreturn {\n  json: {\n    score: parsed.score,\n    category: parsed.category,\n    reasoning: parsed.reasoning,\n    name: $('Webhook').item.json.body.name,\n    email: $('Webhook').item.json.body.email,\n    company: $('Webhook').item.json.body.company\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "83998526-dac5-42fd-af0e-96464ac6187c",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "tableId": "leads",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "name",
+              "fieldValue": "={{ $json.name }}"
+            },
+            {
+              "fieldId": "email",
+              "fieldValue": "={{ $json.email }}"
+            },
+            {
+              "fieldId": "company",
+              "fieldValue": "={{ $json.company }}"
+            },
+            {
+              "fieldId": "score",
+              "fieldValue": "={{ $json.score }}"
+            },
+            {
+              "fieldId": "category",
+              "fieldValue": "={{ $json.category }}"
+            },
+            {
+              "fieldId": "reasoning",
+              "fieldValue": "={{ $json.reasoning }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        624,
+        0
+      ],
+      "id": "b26d7629-4c52-46e3-a551-c6705ca45063",
+      "name": "Create a row",
+      "credentials": {
+        "supabaseApi": {
+          "id": "I2cxKxzbBMDAwbHd",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "2dee21ea-b594-447c-9c4d-0e67d0e74fa6",
+              "leftValue": "={{ $json.score }}",
+              "rightValue": 7,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        832,
+        0
+      ],
+      "id": "d1006728-03fb-49cb-b04a-1fc7740d6de0",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "sendTo": "negociosonlinerh2@gmail.com",
+        "subject": "=🔥 Hot Lead: {{ $json.name }} — Score {{ $json.score }}",
+        "message": "=New hot lead detected!  Name: {{ $json.name }} Email: {{ $json.email }} Company: {{ $json.company }} Score: {{ $json.score }}/10 Category: {{ $json.category }}  Reasoning: {{ $json.reasoning }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1040,
+        -176
+      ],
+      "id": "8af76de4-5e42-453e-aeff-9187b2fc6f92",
+      "name": "Send a message",
+      "webhookId": "10234fa7-8224-447a-989e-5f44392211e2",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "MbXp3Gu5VhPji03O",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Create a row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a row": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "a8a5fa18-f778-4948-b1db-15de54a41706",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "7a39ad1d84df2419b0ea72ee1c4645945a4b79246bc392a94a76326ac95b7fc0"
+  },
+  "nodeGroups": [],
+  "id": "7o8pitm60TJaBdWn",
+  "tags": []
+}
